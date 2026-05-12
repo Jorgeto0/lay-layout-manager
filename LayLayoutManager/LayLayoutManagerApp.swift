@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     private let restoreEngine = RestoreEngine()
     private let reconciler = ReconciliationEngine()
     private let detector = EnvironmentDetector()
+    private let loginItemManager = LoginItemManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -25,23 +26,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
             button.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Lay Layout Manager")
         }
 
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Lay Layout Manager", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s"))
-        menu.addItem(NSMenuItem(title: "Restore Layout", action: #selector(restoreLayout), keyEquivalent: "r"))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "[DEV] Simulate Monitor Change", action: #selector(simulateMonitorChange), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        statusItem?.menu = menu
+        statusItem?.menu = buildMenu()
 
         detector.delegate = self
         detector.startMonitoring()
 
         let config = detector.currentConfigurationHash()
         print("[AppDelegate] Active config: \(config)")
-        print("[AppDelegate] Saved configs: \(store.listSavedConfigs())")
+        print("[LoginItemManager] Launch at login: \(loginItemManager.isEnabled)")
+    }
+
+    func buildMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Lay Layout Manager", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s"))
+        menu.addItem(NSMenuItem(title: "Restore Layout", action: #selector(restoreLayout), keyEquivalent: "r"))
+        menu.addItem(NSMenuItem.separator())
+
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
+        loginItem.state = loginItemManager.isEnabled ? .on : .off
+        menu.addItem(loginItem)
+
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "[DEV] Simulate Monitor Change", action: #selector(simulateMonitorChange), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        return menu
     }
 
     func monitorsDidChange() {
@@ -65,6 +76,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
 
     @objc func restoreLayout() {
         restoreAndVerify()
+    }
+
+    @objc func toggleLoginItem() {
+        loginItemManager.toggle()
+        statusItem?.menu = buildMenu()
+        print("[AppDelegate] Launch at login: \(loginItemManager.isEnabled)")
     }
 
     private func restoreAndVerify() {
