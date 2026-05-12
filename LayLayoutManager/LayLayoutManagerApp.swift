@@ -1,4 +1,5 @@
 import SwiftUI
+import ApplicationServices
 
 @main
 struct LayLayoutManagerApp: App {
@@ -17,6 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     private let reconciler = ReconciliationEngine()
     private let detector = EnvironmentDetector()
     private let loginItemManager = LoginItemManager()
+    private var onboardingWindow: NSWindow?
+    private var accessibilityTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -28,12 +31,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
 
         statusItem?.menu = buildMenu()
 
+        if AXIsProcessTrusted() {
+            startApp()
+        } else {
+            showOnboarding()
+        }
+    }
+
+    // Called once Accessibility is granted
+    private func startApp() {
         detector.delegate = self
         detector.startMonitoring()
-
         let config = detector.currentConfigurationHash()
         print("[AppDelegate] Active config: \(config)")
         print("[LoginItemManager] Launch at login: \(loginItemManager.isEnabled)")
+    }
+
+    // Show onboarding and poll for permission
+    private func showOnboarding() {
+        print("[AppDelegate] Accessibility not granted — showing onboarding")
+
+        let view = OnboardingView()
+        let hosting = NSHostingController(rootView: view)
+
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Welcome to Lay"
+        window.styleMask = [.titled, .closable]
+        window.setContentSize(NSSize(width: 380, height: 400))
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        onboardingWindow = window
+
+        // Poll every 2 seconds until permission is granted
+        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+            if AXIsProcessTrusted() {
+                print("[AppDelegate] Accessibility granted — starting app")
+                timer.invalidate()
+                self?.onboardingWindow?.close()
+                self?.onboardingWindow = nil
+                self?.startApp()
+            }
+        }
     }
 
     func buildMenu() -> NSMenu {
