@@ -19,14 +19,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     private let detector = EnvironmentDetector()
     private let loginItemManager = LoginItemManager()
     private var onboardingWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     private var accessibilityTimer: Timer?
+    private var lastSaveDate: Date?
+    private var windowCount: Int = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Lay Layout Manager")
+            button.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Lay")
         }
 
         statusItem?.menu = buildMenu()
@@ -38,22 +41,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         }
     }
 
-    // Called once Accessibility is granted
     private func startApp() {
         detector.delegate = self
         detector.startMonitoring()
         let config = detector.currentConfigurationHash()
         print("[AppDelegate] Active config: \(config)")
-        print("[LoginItemManager] Launch at login: \(loginItemManager.isEnabled)")
     }
 
-    // Show onboarding and poll for permission
     private func showOnboarding() {
         print("[AppDelegate] Accessibility not granted — showing onboarding")
-
         let view = OnboardingView()
         let hosting = NSHostingController(rootView: view)
-
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to Lay"
         window.styleMask = [.titled, .closable]
@@ -63,7 +61,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow = window
 
-        // Poll every 2 seconds until permission is granted
         accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
             if AXIsProcessTrusted() {
                 print("[AppDelegate] Accessibility granted — starting app")
@@ -77,50 +74,74 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
 
     func buildMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Lay Layout Manager", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s"))
-        menu.addItem(NSMenuItem(title: "Restore Layout", action: #selector(restoreLayout), keyEquivalent: "r"))
+
+        // App header
+        let headerItem = NSMenuItem()
+        let headerView = MenuHeaderView(
+            windowCount: windowCount,
+            lastSaveDate: lastSaveDate
+        )
+        let hostingView = NSHostingView(rootView: headerView)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 220, height: 52)
+        headerItem.view = hostingView
+        menu.addItem(headerItem)
+
         menu.addItem(NSMenuItem.separator())
 
-        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
-        loginItem.state = loginItemManager.isEnabled ? .on : .off
-        menu.addItem(loginItem)
+        // Save Layout
+        let saveItem = NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s")
+        saveItem.target = self
+        menu.addItem(saveItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "[DEV] Simulate Monitor Change", action: #selector(simulateMonitorChange), keyEquivalent: ""))
+
+        // Settings
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        // Quit
+        menu.addItem(NSMenuItem(title: "Quit Lay", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
         return menu
     }
 
     func monitorsDidChange() {
-        print("[AppDelegate] Monitor change — waiting 1s for system to settle...")
+        print("[AppDelegate] Monitor change detected — waiting 1s...")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            print("[AppDelegate] Triggering auto-restore")
             self.restoreAndVerify()
         }
-    }
-
-    @objc func simulateMonitorChange() {
-        print("[AppDelegate] Simulating monitor change")
-        monitorsDidChange()
     }
 
     @objc func saveLayout() {
         let config = detector.currentConfigurationHash()
         let windows = tracker.getAllWindows()
         store.save(windows: windows, configHash: config)
-    }
-
-    @objc func restoreLayout() {
-        restoreAndVerify()
-    }
-
-    @objc func toggleLoginItem() {
-        loginItemManager.toggle()
+        windowCount = windows.count
+        lastSaveDate = Date()
         statusItem?.menu = buildMenu()
-        print("[AppDelegate] Launch at login: \(loginItemManager.isEnabled)")
+        print("[AppDelegate] Saved \(windows.count) windows")
+    }
+
+    @objc func openSettings() {
+        if let existing = settingsWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let view = SettingsView()
+        let hosting = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Lay Settings"
+        window.styleMask = [.titled, .closable]
+        window.setContentSize(NSSize(width: 480, height: 360))
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow = window
     }
 
     private func restoreAndVerify() {
@@ -130,9 +151,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
             return
         }
         restoreEngine.restore(from: snapshot)
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.reconciler.verify(snapshot: snapshot)
         }
+    }
+}
+
+// MARK: - Menu Header View
+struct MenuHeaderView: View {
+    let windowCount: Int
+    let lastSaveDate: Date?
+
+    var statusText: String {
+        if windowCount == 0 { return "No layout saved yet" }
+        return "\(windowCount) windows tracked"
+    }
+
+    var saveText: String {
+        guard let date = lastSaveDate else { return "Never saved" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Saved \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.3.group")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.accentColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Lay")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(windowCount == 0 ? "No layout saved yet" : saveText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
