@@ -45,6 +45,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         detector.delegate = self
         detector.startMonitoring()
         let config = detector.currentConfigurationHash()
+
+        // Load existing snapshot to show count in menu
+        if let snapshot = store.load(configHash: config) {
+            windowCount = snapshot.windows.count
+            lastSaveDate = snapshot.date
+            statusItem?.menu = buildMenu()
+        }
+
         print("[AppDelegate] Active config: \(config)")
     }
 
@@ -75,34 +83,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
-        // App header
         let headerItem = NSMenuItem()
-        let headerView = MenuHeaderView(
-            windowCount: windowCount,
-            lastSaveDate: lastSaveDate
-        )
+        let headerView = MenuHeaderView(windowCount: windowCount, lastSaveDate: lastSaveDate)
         let hostingView = NSHostingView(rootView: headerView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 220, height: 52)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 220, height: 56)
         headerItem.view = hostingView
         menu.addItem(headerItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Save Layout
         let saveItem = NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s")
         saveItem.target = self
         menu.addItem(saveItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Settings
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Quit
         menu.addItem(NSMenuItem(title: "Quit Lay", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         return menu
@@ -131,7 +132,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-
         let view = SettingsView()
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
@@ -157,18 +157,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     }
 }
 
-// MARK: - Menu Header View
 struct MenuHeaderView: View {
     let windowCount: Int
     let lastSaveDate: Date?
 
-    var statusText: String {
-        if windowCount == 0 { return "No layout saved yet" }
-        return "\(windowCount) windows tracked"
-    }
-
     var saveText: String {
-        guard let date = lastSaveDate else { return "Never saved" }
+        guard let date = lastSaveDate else { return "No layout saved yet" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return "Saved \(formatter.localizedString(for: date, relativeTo: Date()))"
@@ -177,19 +171,29 @@ struct MenuHeaderView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "rectangle.3.group")
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundColor(.accentColor)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Lay")
                     .font(.system(size: 13, weight: .semibold))
-                Text(windowCount == 0 ? "No layout saved yet" : saveText)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Text(saveText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    if windowCount > 0 {
+                        Text("·")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Text("\(windowCount) windows")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             Spacer()
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
     }
 }
