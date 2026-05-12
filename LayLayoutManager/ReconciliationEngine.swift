@@ -40,7 +40,7 @@ class ReconciliationEngine {
         // Retry mismatched windows after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) {
             let restoreEngine = RestoreEngine()
-            let retrySnapshot = LayoutSnapshot(date: snapshot.date, windows: mismatches)
+            let retrySnapshot = LayoutSnapshot(date: snapshot.date, configHash: snapshot.configHash, windows: mismatches)
             restoreEngine.restore(from: retrySnapshot)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + self.retryDelay) {

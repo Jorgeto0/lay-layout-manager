@@ -38,7 +38,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
 
         detector.delegate = self
         detector.startMonitoring()
-        _ = detector.currentConfigurationHash()
+
+        let config = detector.currentConfigurationHash()
+        print("[AppDelegate] Active config: \(config)")
+        print("[AppDelegate] Saved configs: \(store.listSavedConfigs())")
     }
 
     func monitorsDidChange() {
@@ -55,8 +58,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     }
 
     @objc func saveLayout() {
+        let config = detector.currentConfigurationHash()
         let windows = tracker.getAllWindows()
-        store.save(windows: windows)
+        store.save(windows: windows, configHash: config)
     }
 
     @objc func restoreLayout() {
@@ -64,13 +68,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     }
 
     private func restoreAndVerify() {
-        guard let snapshot = store.load() else {
-            print("[AppDelegate] No snapshot to restore")
+        let config = detector.currentConfigurationHash()
+        guard let snapshot = store.load(configHash: config) else {
+            print("[AppDelegate] No snapshot for current config: \(config)")
             return
         }
         restoreEngine.restore(from: snapshot)
 
-        // Verify after a short delay to let windows settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.reconciler.verify(snapshot: snapshot)
         }
