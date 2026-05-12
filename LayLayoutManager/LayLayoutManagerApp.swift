@@ -29,7 +29,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Lay")
+            // Use our app icon as menu bar icon template
+            if let icon = NSImage(named: "AppIcon") {
+                let resized = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+                    icon.draw(in: rect)
+                    return true
+                }
+                resized.isTemplate = false
+                button.image = resized
+            } else {
+                button.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Lay")
+            }
         }
 
         statusItem?.menu = buildMenu()
@@ -46,7 +56,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         detector.startMonitoring()
         let config = detector.currentConfigurationHash()
 
-        // Load existing snapshot to show count in menu
         if let snapshot = store.load(configHash: config) {
             windowCount = snapshot.windows.count
             lastSaveDate = snapshot.date
@@ -86,7 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         let headerItem = NSMenuItem()
         let headerView = MenuHeaderView(windowCount: windowCount, lastSaveDate: lastSaveDate)
         let hostingView = NSHostingView(rootView: headerView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 220, height: 56)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 240, height: 60)
         headerItem.view = hostingView
         menu.addItem(headerItem)
 
@@ -169,15 +178,17 @@ struct MenuHeaderView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "rectangle.3.group")
-                .font(.system(size: 20, weight: .medium))
-                .foregroundColor(.accentColor)
+        HStack(spacing: 12) {
+            // App icon
+            Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                .resizable()
+                .frame(width: 36, height: 36)
+                .cornerRadius(8)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Lay")
                     .font(.system(size: 13, weight: .semibold))
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Text(saveText)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
