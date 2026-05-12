@@ -1,0 +1,17 @@
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+build/
+.build/
+.swiftpm/
+.DS_Store
+*.dSYM.zip
+*.dSYM
