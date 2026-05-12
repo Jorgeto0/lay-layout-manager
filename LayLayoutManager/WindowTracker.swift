@@ -33,7 +33,7 @@ class WindowTracker {
     }
 
     // Walk every running app and collect visible windows
-    private func getAllWindows() -> [WindowInfo] {
+    func getAllWindows() -> [WindowInfo] {
         var result: [WindowInfo] = []
 
         for app in NSWorkspace.shared.runningApplications {
