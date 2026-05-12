@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let tracker = WindowTracker()
     private let store = LayoutStore()
+    private let restoreEngine = RestoreEngine()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -26,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Lay Layout Manager", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s"))
+        menu.addItem(NSMenuItem(title: "Restore Layout", action: #selector(restoreLayout), keyEquivalent: "r"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
@@ -34,5 +36,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func saveLayout() {
         let windows = tracker.getAllWindows()
         store.save(windows: windows)
+    }
+
+    @objc func restoreLayout() {
+        guard let snapshot = store.load() else {
+            print("[AppDelegate] No snapshot to restore")
+            return
+        }
+        restoreEngine.restore(from: snapshot)
     }
 }
