@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     private let tracker = WindowTracker()
     private let store = LayoutStore()
     private let restoreEngine = RestoreEngine()
+    private let reconciler = ReconciliationEngine()
     private let detector = EnvironmentDetector()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -44,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         print("[AppDelegate] Monitor change — waiting 1s for system to settle...")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             print("[AppDelegate] Triggering auto-restore")
-            self.restoreLayout()
+            self.restoreAndVerify()
         }
     }
 
@@ -59,10 +60,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
     }
 
     @objc func restoreLayout() {
+        restoreAndVerify()
+    }
+
+    private func restoreAndVerify() {
         guard let snapshot = store.load() else {
             print("[AppDelegate] No snapshot to restore")
             return
         }
         restoreEngine.restore(from: snapshot)
+
+        // Verify after a short delay to let windows settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.reconciler.verify(snapshot: snapshot)
+        }
     }
 }
