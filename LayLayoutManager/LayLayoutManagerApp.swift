@@ -30,26 +30,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, EnvironmentDetectorDelegate 
         menu.addItem(NSMenuItem(title: "Save Layout", action: #selector(saveLayout), keyEquivalent: "s"))
         menu.addItem(NSMenuItem(title: "Restore Layout", action: #selector(restoreLayout), keyEquivalent: "r"))
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "[DEV] Simulate Monitor Change", action: #selector(simulateMonitorChange), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
 
-        // Start monitoring display changes
         detector.delegate = self
         detector.startMonitoring()
-
-        // Log current display configuration
         _ = detector.currentConfigurationHash()
     }
 
-    // Called automatically when monitors connect or disconnect
     func monitorsDidChange() {
         print("[AppDelegate] Monitor change — waiting 1s for system to settle...")
-
-        // Wait 1 second for macOS to finish reconfiguring displays
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             print("[AppDelegate] Triggering auto-restore")
             self.restoreLayout()
         }
+    }
+
+    @objc func simulateMonitorChange() {
+        print("[AppDelegate] Simulating monitor change")
+        monitorsDidChange()
     }
 
     @objc func saveLayout() {
