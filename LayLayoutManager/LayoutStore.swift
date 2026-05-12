@@ -1,12 +1,11 @@
 import Foundation
 
-// LayoutStore - Phase 6
-// Saves one layout snapshot per monitor configuration
-// File name is based on the display configuration hash
+// LayoutStore - updated with window index for smarter matching
 
 struct WindowSnapshot: Codable {
     let app: String
     let title: String
+    let index: Int
     let x: Double
     let y: Double
     let width: Double
@@ -26,15 +25,14 @@ class LayoutStore {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first else { return nil }
-
         let dir = appSupport.appendingPathComponent("LayLayoutManager")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 
     private func fileURL(for configHash: String) -> URL? {
-        // Sanitize hash for use as filename
-        let safeName = configHash.replacingOccurrences(of: "|", with: "_")
+        let safeName = configHash
+            .replacingOccurrences(of: "|", with: "_")
             .replacingOccurrences(of: " ", with: "_")
         return storageDirectory?.appendingPathComponent("layout_\(safeName).json")
     }
@@ -44,20 +42,15 @@ class LayoutStore {
             WindowSnapshot(
                 app: w.app,
                 title: w.title,
+                index: w.index,
                 x: w.frame.origin.x,
                 y: w.frame.origin.y,
                 width: w.frame.size.width,
                 height: w.frame.size.height
             )
         }
-
         let layout = LayoutSnapshot(date: Date(), configHash: configHash, windows: snapshots)
-
-        guard let url = fileURL(for: configHash) else {
-            print("[LayoutStore] ERROR: could not resolve storage path")
-            return
-        }
-
+        guard let url = fileURL(for: configHash) else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
@@ -66,13 +59,12 @@ class LayoutStore {
             try data.write(to: url, options: .atomic)
             print("[LayoutStore] Saved \(snapshots.count) windows for config: \(configHash)")
         } catch {
-            print("[LayoutStore] ERROR saving snapshot: \(error)")
+            print("[LayoutStore] ERROR: \(error)")
         }
     }
 
     func load(configHash: String) -> LayoutSnapshot? {
         guard let url = fileURL(for: configHash) else { return nil }
-
         do {
             let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()

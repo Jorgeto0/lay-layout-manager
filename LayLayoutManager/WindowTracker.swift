@@ -1,38 +1,30 @@
 import Cocoa
 import ApplicationServices
 
-// WindowTracker - Phase 1
-// Single responsibility: list all visible windows with their metadata
-// Uses Accessibility API (AXUIElement) to read window info from running apps
+// WindowTracker - Phase 1 updated
+// Smarter window identity: app + title + index fallback
 
 struct WindowInfo {
     let app: String
     let title: String
+    let index: Int
     let frame: CGRect
 }
 
 class WindowTracker {
 
-    // Request Accessibility permission and list all windows
     func requestAccessAndTrack() {
         let trusted = AXIsProcessTrusted()
-
         if !trusted {
-            // Prompt the user to grant Accessibility access
             let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true]
             AXIsProcessTrustedWithOptions(options)
-            print("[WindowTracker] Accessibility not granted yet — permission dialog shown")
+            print("[WindowTracker] Accessibility not granted yet")
             return
         }
-
         let windows = getAllWindows()
-        print("[WindowTracker] Found \(windows.count) windows:")
-        for w in windows {
-            print("  App: \(w.app) | Title: \(w.title) | Frame: \(w.frame)")
-        }
+        print("[WindowTracker] Found \(windows.count) windows")
     }
 
-    // Walk every running app and collect visible windows
     func getAllWindows() -> [WindowInfo] {
         var result: [WindowInfo] = []
 
@@ -45,10 +37,10 @@ class WindowTracker {
             guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
                   let axWindows = windowsRef as? [AXUIElement] else { continue }
 
-            for axWindow in axWindows {
+            for (index, axWindow) in axWindows.enumerated() {
                 let title = getStringAttribute(axWindow, kAXTitleAttribute)
                 let frame = getWindowFrame(axWindow)
-                result.append(WindowInfo(app: bundleID, title: title, frame: frame))
+                result.append(WindowInfo(app: bundleID, title: title, index: index, frame: frame))
             }
         }
 
@@ -65,17 +57,14 @@ class WindowTracker {
     private func getWindowFrame(_ element: AXUIElement) -> CGRect {
         var posRef: CFTypeRef?
         var sizeRef: CFTypeRef?
-
         guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posRef) == .success,
               AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeRef) == .success else {
             return .zero
         }
-
         var position = CGPoint.zero
         var size = CGSize.zero
         AXValueGetValue(posRef as! AXValue, .cgPoint, &position)
         AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
-
         return CGRect(origin: position, size: size)
     }
 }

@@ -1,24 +1,20 @@
 import Cocoa
 import ApplicationServices
 
-// RestoreEngine - Phase 3
-// Single responsibility: move windows back to their saved positions
-// Matches saved snapshots to current windows by app bundle ID + title
+// RestoreEngine - updated with smarter window matching
+// Matches by title first, falls back to window index
 
 class RestoreEngine {
 
     func restore(from snapshot: LayoutSnapshot) {
         print("[RestoreEngine] Starting restore of \(snapshot.windows.count) windows")
-
         for saved in snapshot.windows {
             restoreWindow(saved)
         }
-
         print("[RestoreEngine] Restore complete")
     }
 
     private func restoreWindow(_ saved: WindowSnapshot) {
-        // Find the running app that matches the saved bundle ID
         guard let app = NSWorkspace.shared.runningApplications.first(where: {
             $0.bundleIdentifier == saved.app && $0.activationPolicy == .regular
         }) else {
@@ -29,23 +25,28 @@ class RestoreEngine {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var windowsRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
-              let axWindows = windowsRef as? [AXUIElement] else {
-            print("[RestoreEngine] SKIP: could not get windows for \(saved.app)")
-            return
-        }
+              let axWindows = windowsRef as? [AXUIElement] else { return }
 
-        // Match window by title
+        // Try title match first
         for axWindow in axWindows {
             var titleRef: CFTypeRef?
             AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
             let title = titleRef as? String ?? ""
-
             if title == saved.title {
                 move(axWindow, to: CGPoint(x: saved.x, y: saved.y))
                 resize(axWindow, to: CGSize(width: saved.width, height: saved.height))
-                print("[RestoreEngine] Restored: \(saved.app) | \"\(saved.title)\"")
+                print("[RestoreEngine] Restored by title: \(saved.app) | \"\(saved.title)\"")
                 return
             }
+        }
+
+        // Fallback: use window index
+        if saved.index < axWindows.count {
+            let axWindow = axWindows[saved.index]
+            move(axWindow, to: CGPoint(x: saved.x, y: saved.y))
+            resize(axWindow, to: CGSize(width: saved.width, height: saved.height))
+            print("[RestoreEngine] Restored by index: \(saved.app) | index \(saved.index)")
+            return
         }
 
         print("[RestoreEngine] SKIP: window not found — \(saved.app) | \"\(saved.title)\"")
